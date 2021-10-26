@@ -42,20 +42,20 @@ class Parser:
 
         with stream.syntax(
             # Symbols
+            escape=r"\\.",
             sqrbr=r"\[|\]",
             brace=r"\{|\}",
             scope=r"<|>",
             equals=r"=",
             text=r"[^\[\]\{\}<>\\]+",
             arrow=r" ?[-=]> ?",
-            escape=r"\\.",
             # Types
             hex_code=r"#[0-9a-fA-F]{6}",
             url=r"http(s)?:\/\/[^(),]+\.[^(),]+",
             integer=r"[\d]+",
             color=r"black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray|dark_gray|blue|green|aqua|red|light_purple|yellow|white|reset",
             keybind=r"advancements|attack|back|chat|command|drop|forward|fullscreen|hotbar|inventory|jump|left|loadToolbarActivator|pickItem|playerlist|right|saveToolbarActivator|screenshot|smoothCamera|sneak|socialInteractions|spectatorOutlines|sprint|swapOffhand|togglePerspective|use",
-            selector=r"@[parse](\[.+\])?",
+            selector=r"@[parse](\[.*\])?",
             boolean=r"true|false",
             string=r"\"(?:\\.|[^\\\n])*?\"",
             # Keywords sorted by type
@@ -75,6 +75,7 @@ class Parser:
             ):
                 if escape:
                     output.append(escape.value[1])
+                    print(escape.value)
 
                 elif sqrbr:
                     modified_text = self.internal_parse(stream)
@@ -230,6 +231,7 @@ class Parser:
                 url,
                 kw_color,
                 hex_code,
+                color,
             ) = stream.expect(
                 "kw_json",
                 "kw_scope",
@@ -240,6 +242,7 @@ class Parser:
                 "url",
                 "kw_color",
                 "hex_code",
+                "color",
             )
             if kw_json:
                 self.error_if_scope(stream)
@@ -261,20 +264,21 @@ class Parser:
                 with stream.provide(scoped=True):
                     modifier_contents["hoverEvent"] = {
                         "action": "show_text",
-                        "contents": self.clean_ast(self.internal_parse(stream)),
+                        "contents": self.internal_parse(stream),
                     }
                 stream.expect(("scope", ">"))
 
             elif kw_color or hex_code:
                 if kw_color:
                     stream.expect("equals")
-                    color = stream.expect("color", "hex_code")
+                    color, hex_code = stream.expect("color", "hex_code")
+                    color = color.value if color else hex_code.value
                 else:
-                    color = hex_code
+                    color = hex_code.value
 
-                if isinstance(color, list):
-                    color = color[0]
+                modifier_contents["color"] = color
 
+            elif color:
                 modifier_contents["color"] = color.value
 
             elif url or kw_link:
