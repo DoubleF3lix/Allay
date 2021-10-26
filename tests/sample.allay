@@ -1,0 +1,46 @@
+Formatting:
+Here's some basic text. This is [underlined](underlined=true).
+This is [bold](bold=true). This is [italic](italic=true). 
+This is [strikethrough](strikethrough=true). This is [obfuscated](obfuscated=true). 
+[Some text](#00aced) with color. 
+[Some text](color=blue) with a different type of color.
+[Some](font="namespace:font/file/here") text.
+
+Interactivity:
+[insetion](insertion="this text is appended into the chat box when the user shift clicks this")
+[open url 1](https://example.com)
+[open url 2](link="https://example.com")
+[run cmd](run="say hello. It should support extra \"quotes\" too")
+[suggest cmd](suggest="/say Same as above")
+[change page](page=49)
+[copy2clipboard](copy="voila, im inside your PC now! mwahahaha")
+[show text on hover](hover_text=<The braces help to clarify scope so I can do [this](#ff0000,bold=true)>)
+[show item on hover](hover_item={"id": "minecraft:netherite_hoe", "count": 1, "tag": "{display: {Name: \"\\\"joe\\\"\"}}"})
+
+Standalone:
+{@a, sep="\""} 
+{translate="translation_key"}
+{translate="text goes here", with=["raw", "json"]}
+{score="@s" -> "objective"}
+{score="fake_player" -> "objective"}
+{nbt="path", block="~ ~ ~", sep=", "}
+{nbt="path", entity="@s", sep=" - "}
+{nbt="path", storage="storage:location", sep=" -=- "}
+{key=inventory}
+
+But better yet... we can mix things!
+This right here is standard text, but with the power of [formatting](italic=true), we can make it [super](underlined=true) [pretty](bold=true,italic=true)!! Good luck with [your adventures](obfuscated=true).
+Things might get broken... isn't that right {@a[name=DoubleF3lix]}? It looks like you're holding a "{nbt="SelectedItem.id",entity="@a"}".
+This text can also get [colorful!](#00aced,bold=true,underlined=true). Want to be sarcastic or just redact something? [Stricken from the record... I guess?](strikethrough=true)
+Hovering over [this text](hover_text=<will show this [stuff!](bold=true,italic=true) Isn't that [wild](underlined=true)?>, insertion="I'm in your chat bar now... spooky, eh?")
+This is a [link](https://github.com/DoubleF3lix), but so is [this](link="example.com")
+
+Here's some token spam so we can make sure it isn't picked up by my crummy lexer/parser:
+help:=(walrus operator????)pls"work"beans(test=text)w\~\~hich\~\~_isWHY!you're-\[triggered\].
+
+And here's hoping that escaping things also works:
+Some basic [hover text](hover_text=<hover... hover... hover... :\\>)
+We'll also need to auto-escape some things, like this: \n\n\n\n\n\n\n
+
+And with that... goodnight!
+wait so let me try something: \\\\ hmmmm

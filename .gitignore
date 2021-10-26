@@ -1,0 +1,9 @@
+.vscode/
+allay.egg-info
+*.pyc
+**__pycache__
+**.bat
+**.txt
+**.toml
+build/
+dist/
