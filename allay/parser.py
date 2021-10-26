@@ -75,7 +75,6 @@ class Parser:
             ):
                 if escape:
                     output.append(escape.value[1])
-                    print(escape.value)
 
                 elif sqrbr:
                     modified_text = self.internal_parse(stream)
