@@ -23,10 +23,10 @@ class Parser:
                 return json.dumps(
                     self.internal_parse(TokenStream(contents)), indent=indent
                 )
-            else:
-                return json.dumps(self.internal_parse(TokenStream(contents)))
+
+            return json.dumps(self.internal_parse(TokenStream(contents)))
         except InvalidSyntax as error:
-            raise SyntaxError(error.format("src"))
+            raise InvalidSyntax(error.format("src"))
 
     def internal_parse(self, stream: TokenStream) -> list:
         """
