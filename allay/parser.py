@@ -26,7 +26,7 @@ class Parser:
 
             return json.dumps(self.internal_parse(TokenStream(contents)))
         except InvalidSyntax as error:
-            raise InvalidSyntax(error)
+            raise InvalidSyntax(error.format("src"))
 
     def internal_parse(self, stream: TokenStream) -> list:
         """
