@@ -18,12 +18,15 @@ class Parser:
         Returns:
             str: The text-component
         """
-        if indent:
-            return json.dumps(
-                self.internal_parse(TokenStream(contents)), indent=indent
-            )
-        
-        return json.dumps(self.internal_parse(TokenStream(contents)))
+        try:
+            if indent:
+                return json.dumps(
+                    self.internal_parse(TokenStream(contents)), indent=indent
+                )
+
+            return json.dumps(self.internal_parse(TokenStream(contents)))
+        except InvalidSyntax as error:
+            raise InvalidSyntax(error)
 
     def internal_parse(self, stream: TokenStream) -> list:
         """
