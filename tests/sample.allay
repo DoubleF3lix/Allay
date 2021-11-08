@@ -40,7 +40,3 @@ help:=(walrus operator????)pls"work"beans(test=text)w\~\~hich\~\~_isWHY!you're-\
 
 And here's hoping that escaping things also works:
 Some basic [hover text](hover_text=<hover... hover... hover... :\\>)
-We'll also need to auto-escape some things, like this: \n\n\n\n\n\n\n
-
-And with that... goodnight!
-wait so let me try something: \\\\ hmmmm

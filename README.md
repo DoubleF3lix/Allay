@@ -14,7 +14,6 @@ text_component = parser.parse(string)
 ```
 
 ---
-
 ## Format
 Allay uses a markdown-inspired format. To start, we'll define our types.
 - `string` - `"string"`
@@ -80,6 +79,70 @@ And some examples:
 - `{score="@s"->"rightClick"}`
 - `{key=advancements}`
 - `{@s}(hover_text=<gone fancy>, #00aced)`
+
+---
+## Definitions
+
+Allay also supports text reuse in the form of **patterns** and **templates** (collectively referred to as **definitions**). All definitions must be included at the top of the file and separated by a delimiter (`#ALLAYDEFS` by default). Patterns can be identified by the `@` symbol, and templates can be defined by the `$` symbol. Both can be given custom names, but these names can only include letters, numbers, and underscores.
+
+---
+### Patterns
+Patterns let you reuse modifiers.
+
+An example of their usage is as follows:
+```
+@pattern_name = (color=#000000, bold, hover_text=<Basically /clone>)
+Here is some [modified text](@pattern_name)
+```
+In this case, `[modified text](@pattern_name)` is equivalent to `[modified text](color=#000000, bold, hover_text=<Basically /clone>)`. 
+
+However, merging patterns wither other modifiers is valid:
+```
+@pattern1 = (bold, italic)
+@pattern2 = (underlined, bold=false)
+
+More [text](@pattern1, @pattern2, link="https://example.com")
+```
+Patterns are applied in order that they are listed in from left to right.
+In this case, `[text](@pattern1, @pattern2, link="https://example.com")` is equivalent to `[text](italic, underlined, link="https://example.com")`, as the `bold` modifier in `@pattern1` is overridden by `@pattern2`.
+
+---
+### Templates
+The primary attribute of templates is that they let you reuse blocks of text, and they can take arguments:
+```
+$template_name = {A template can use [modifiers](underlined) like normal. 
+This template has %0 arguments. 
+By the way, you owe me $%1.00.}
+```
+
+Usage is as follows:
+```md
+{$template_name, "2", "18,000"}
+```
+This would translate to 
+
+```
+A template can use [modifiers](underlined) like normal.
+This template has 2 arguments. 
+For instance, you owe me $18,000.00.
+```
+
+Arguments are done simply via find-replace, so take care to avoid using `%<num>` in your text. Currently, they cannot be escaped. Any missing arguments will not be replaced (and left as `%<num>`), and any extra arguments will be ignored. All arguments must be passed in as strings.
+
+---
+To use definitions in your text, do the following:
+```
+@pattern = ()
+$template = {}
+#ALLAYDEFS
+
+Okay, back to the show.
+```
+The first blank line in-between the delimiter (`#ALLAYDEFS`) and the text body is ignored. The delimiter cannot be escaped, so using it in your text will result in the definitions being ended prematurely and likely a syntax error. However, if this becomes an issue, you can change the delimiter by setting `definition_delimeter` in `allay.Parser()`.
+
+--- 
+## Notes
+The package comes with a beet plugin (created by [RitikShah](https://github.com/RitikShah)). It is not officially supported, and any issues should be directed to its creator.
 
 If you have any questions, need any help, etc., feel free to make an issue with your question.
 

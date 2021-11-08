@@ -3,30 +3,160 @@ import json
 from tokenstream import TokenStream
 from tokenstream.error import InvalidSyntax
 
-from allay.json_parser import parse_json
+from .json_parser import parse_json
 
 
 class Parser:
-    def parse(self, contents: str, indent: int = None) -> str:
+    """
+    Parser - The base class for all allay parsers
+
+    Args:
+        definition_delimeter (str, optional): The delimeter that should separate the definitions from the text. Defaults to "#ALLAYDEFS\n".
+    """
+
+    def __init__(self, definition_delimeter: str = "#ALLAYDEFS\n") -> None:
+        self.definition_delimeter = definition_delimeter
+
+    def parse(self, text: str, indent: int = None) -> str:
         """
         parse - Converts a string into a text-component using the Allay format
 
         Args:
-            contents (str): The string to parse
+            text (str): The string to parse
             indent (int, optional): Indentation level. Defaults to None.
+
+        Raises:
+            InvalidSyntax: The syntax is invalid
 
         Returns:
             str: The text-component
         """
         try:
-            if indent:
-                return json.dumps(
-                    self.internal_parse(TokenStream(contents)), indent=indent
-                )
-
-            return json.dumps(self.internal_parse(TokenStream(contents)))
+            return json.dumps(
+                self.internal_parse(TokenStream(self.pre_process(text))),
+                indent=indent,
+            )
         except InvalidSyntax as error:
             raise InvalidSyntax(error.format("src"))
+
+    def pre_process(self, text: str) -> str:
+        """
+        pre_process - Pre-processes the text to isolate any definitions and parse them, as well as clean up the text
+
+        Returns:
+            str: The pre-processed text
+        """
+        # Separate the special components (patterns and templates)
+        defs_end_index = text.find(self.definition_delimeter)
+
+        # The split token was found
+        if defs_end_index != -1:
+            stream = TokenStream(self.trim_newlines(text[:defs_end_index]))
+            self.parse_definitions(stream)
+
+            # Remove #ALLAYDEFS (and the following newline) from the text
+            text = text[defs_end_index + len(self.definition_delimeter) :]
+
+        return self.trim_newlines(text)
+
+    def trim_newlines(self, text: str) -> str:
+        """
+        trim_newlines - Removes newlines from the start and end of the text
+
+        Args:
+            text (str): The text to trim the newlines of
+
+        Returns:
+            str: The trimmed text
+        """
+        if text.startswith("\n"):
+            text = text[1:]
+        if text.endswith("\n"):
+            text = text[:-1]
+
+        return text
+
+    def parse_definitions(self, stream: TokenStream) -> None:
+        """
+        parse_definitions - Parses the definition block (anything above the delimeter) and adds them to class variables
+
+        Args:
+            stream (TokenStream): The stream to parse
+
+        Raises:
+            InvalidSyntax: Invalid syntax was found in a definition
+        """
+        with stream.syntax(
+            pattern=r"@\w+",
+            template=r"\$\w+",
+            equals=r"=",
+            paren=r"\(|\)",
+            brace=r"{|}",
+            semicolon=r";",
+        ), stream.intercept("newline"):
+
+            try:
+                pattern, template = stream.expect("pattern", "template")
+                stream.expect("equals")
+                if pattern:
+                    stream.expect(("paren", "("))
+
+                    with stream.syntax(
+                        # Symbols
+                        escape=r"\\.",
+                        sqrbr=r"\[|\]",
+                        brace=r"\{|\}",
+                        scope=r"<|>",
+                        equals=r"=",
+                        text=r"[^\[\]\{\}<>\\]+",
+                        arrow=r" ?[-=]> ?",
+                        # Types
+                        hex_code=r"#[0-9a-fA-F]{6}",
+                        url=r"http(s)?:\/\/[^(),]+\.[^(),]+",
+                        integer=r"[\d]+",
+                        color=r"black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray|dark_gray|blue|green|aqua|red|light_purple|yellow|white|reset",
+                        keybind=r"advancements|attack|back|chat|command|drop|forward|fullscreen|hotbar|inventory|jump|left|loadToolbarActivator|pickItem|playerlist|right|saveToolbarActivator|screenshot|smoothCamera|sneak|socialInteractions|spectatorOutlines|sprint|swapOffhand|togglePerspective|use",
+                        selector=r"@[parse](\[.*\])?",
+                        boolean=r"true|false",
+                        string=r"\"(?:\\.|[^\\\n])*?\"",
+                        # Keywords sorted by type
+                        kw_json=r"hover_item",
+                        kw_scope=r"hover_text",
+                        kw_color=r"color",
+                        kw_link=r"link",
+                        kw_string=r"copy|suggest|run|insertion|font",
+                        kw_bool=r"bold|italic|obfuscated|strikethrough|underlined",
+                        kw_integer=r"page",
+                        kw_standalone=r"selector|translate|score|nbt|separator|sep|key",
+                        kw_with=r"with",
+                        nbt_location=r"block|entity|storage",
+                    ):
+                        pattern_contents = self.parse_modifiers(stream)
+
+                    stream.expect(("paren", ")"))
+
+                    self.patterns[pattern.value] = pattern_contents
+
+                elif template:
+                    stream.expect(("brace", "{"))
+                    template_contents = self.internal_parse(stream)
+                    stream.expect(("brace", "}"))
+
+                    self.templates[template.value] = template_contents
+
+                if stream.get("newline"):
+                    # Handle new lines in-between arguments
+                    while stream.get("newline"):
+                        continue
+
+                    self.parse_definitions(stream)
+
+            except InvalidSyntax as error:
+                # Check if there's no data left to parse. This handles there being extra newlines between any arguments and the #ALLAYDEFS keyword. If there's still data left, then there's a syntax error.
+                if stream.source[
+                    stream.current.location.pos : len(stream.source)
+                ].strip():
+                    raise error
 
     def internal_parse(self, stream: TokenStream) -> list:
         """
@@ -93,7 +223,8 @@ class Parser:
                     )
 
                 elif brace:
-                    output.append(self.parse_standalone(stream))
+                    q = self.parse_standalone(stream)
+                    output.append(q)
 
                 elif text:
                     output.append(text.value)
@@ -140,8 +271,10 @@ class Parser:
             dict: The standalone block contents
         """
         standalone_contents = {}
-        with stream.syntax(text=None, comma=r","):
-            selector, kw_standalone = stream.expect("selector", "kw_standalone")
+        with stream.syntax(text=None, comma=r",", template=r"\$\w+"):
+            selector, kw_standalone, template = stream.expect(
+                "selector", "kw_standalone", "template"
+            )
             if selector:
                 separator = (
                     self.parse_separator(stream) if stream.get("comma") else None
@@ -197,6 +330,21 @@ class Parser:
                         "objective": objective_name,
                     }
 
+            elif template:
+                if (q := template.value) not in self.templates:
+                    raise InvalidSyntax(f"Unknown template '{q}'")
+
+                args = self.parse_template_args(stream)
+                if args:
+                    # Turn the template into a string so we can use replace on it
+                    template_value = json.dumps(self.templates[q])
+                    # Replace all the tokens
+                    for index, arg in enumerate(args):
+                        template_value = template_value.replace(f"%{index}", arg)
+
+                    # Convert it back into a dictionary
+                    standalone_contents = json.loads(template_value)
+
         stream.expect(("brace", "}"))
 
         with stream.syntax(paren=r"\(|\)"):
@@ -204,9 +352,31 @@ class Parser:
                 modifier_contents = self.parse_modifiers(stream)
                 stream.expect(("paren", ")"))
 
-                standalone_contents = standalone_contents | modifier_contents
+                try:
+                    standalone_contents = standalone_contents | modifier_contents
+                except TypeError:
+                    raise InvalidSyntax("Modifiers are not supported on templates")
 
         return standalone_contents
+
+    def parse_template_args(self, stream: TokenStream) -> list:
+        """
+        parse_template_args - Parses the arguments for a template
+
+        Args:
+            stream (TokenStream): The template call to parse the arguments for
+
+        Returns:
+            list: The list of parsed arguments
+        """
+        args = []
+        if stream.get("comma"):
+            # 1:-1 to remove quotes
+            args.append(stream.expect("string").value[1:-1])
+            # Add the previous argument to the list
+            args.extend(self.parse_template_args(stream))
+
+        return args
 
     def parse_modifiers(self, stream: TokenStream) -> dict:
         """
@@ -219,7 +389,11 @@ class Parser:
             dict: The modifier contents
         """
         modifier_contents = {}
-        with stream.syntax(text=None, comma=r","):
+        with stream.syntax(
+            text=None,
+            comma=r",",
+            pattern=r"@\w+",
+        ):
             (
                 kw_json,
                 kw_scope,
@@ -231,6 +405,7 @@ class Parser:
                 kw_color,
                 hex_code,
                 color,
+                pattern,
             ) = stream.expect(
                 "kw_json",
                 "kw_scope",
@@ -242,6 +417,7 @@ class Parser:
                 "kw_color",
                 "hex_code",
                 "color",
+                "pattern",
             )
             if kw_json:
                 self.error_if_scope(stream)
@@ -333,6 +509,12 @@ class Parser:
 
                 modifier_contents[kw_bool.value] = boolean_value == "true"
 
+            elif pattern:
+                if (q := pattern.value) not in self.patterns:
+                    raise InvalidSyntax(f"Unknown pattern '{q}'")
+
+                modifier_contents = modifier_contents | self.patterns[q]
+
             if stream.get("comma"):
                 modifier_contents = modifier_contents | self.parse_modifiers(stream)
 
@@ -384,5 +566,7 @@ class Parser:
                 # Otherwise it's a standalone
                 else:
                     output.append(item)
+            elif isinstance(item, list):
+                output.append(item)
 
         return output
