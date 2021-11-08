@@ -16,6 +16,8 @@ class Parser:
 
     def __init__(self, definition_delimeter: str = "#ALLAYDEFS\n") -> None:
         self.definition_delimeter = definition_delimeter
+        self.patterns = {}
+        self.templates = {}
 
     def parse(self, input: str, indent: int = None) -> str:
         """
