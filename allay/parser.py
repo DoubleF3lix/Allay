@@ -17,12 +17,12 @@ class Parser:
     def __init__(self, definition_delimeter: str = "#ALLAYDEFS\n") -> None:
         self.definition_delimeter = definition_delimeter
 
-    def parse(self, text: str, indent: int = None) -> str:
+    def parse(self, input: str, indent: int = None) -> str:
         """
         parse - Converts a string into a text-component using the Allay format
 
         Args:
-            text (str): The string to parse
+            input (str): The string to parse, or a file path
             indent (int, optional): Indentation level. Defaults to None.
 
         Raises:
@@ -31,13 +31,26 @@ class Parser:
         Returns:
             str: The text-component
         """
+        # Check if it's a file, and if it is, use the file contents as the input
         try:
-            return json.dumps(
-                self.internal_parse(TokenStream(self.pre_process(text))),
-                indent=indent,
-            )
+            file = f'File "{input}"'  # File path
+            with open(input, "r") as infile:
+                input = infile.read()
+        except (FileNotFoundError, OSError) as error:
+            file = '"src"'
+
+        # Print errors but with pizzaz
+        try:
+            stream = TokenStream(self.pre_process(input))
+            return json.dumps(self.internal_parse(stream), indent=indent)
         except InvalidSyntax as error:
-            raise InvalidSyntax(error.format("src"))
+            error_line = error.location.lineno
+            error_column = error.location.colno
+            raise InvalidSyntax(
+                f"Fatal error:\n\t{file}, line {error_line}\n\t\t{stream.source.split(chr(10))[error_line - 1]}\n\t\t{' ' * (error_column - 1)}^\nInvalidSyntax: {str(error)}".expandtabs(
+                    2
+                )
+            )
 
     def pre_process(self, text: str) -> str:
         """
