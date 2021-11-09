@@ -142,7 +142,7 @@ The first blank line in-between the delimiter (`#ALLAYDEFS`) and the text body i
 
 --- 
 ## Notes
-The package comes with a beet plugin (created by [RitikShah](https://github.com/RitikShah)). It is not officially supported, and any issues should be directed to its creator.
+The package comes with a beet plugin (created by [rx](https://github.com/rx-modules)). It is not officially supported, and any issues should be directed to its creator.
 
 If you have any questions, need any help, etc., feel free to make an issue with your question.
 
