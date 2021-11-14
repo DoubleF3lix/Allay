@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 
 from tokenstream import TokenStream
 from tokenstream.error import InvalidSyntax
@@ -16,6 +17,7 @@ class Parser:
 
     def __init__(self, definition_delimeter: str = "#ALLAYDEFS\n") -> None:
         self.definition_delimeter = definition_delimeter
+
         self.patterns = {}
         self.templates = {}
 
@@ -66,30 +68,45 @@ class Parser:
 
         # The split token was found
         if defs_end_index != -1:
-            stream = TokenStream(self.trim_newlines(text[:defs_end_index]))
+            stream = TokenStream(text[:defs_end_index].strip())
             self.parse_definitions(stream)
 
             # Remove #ALLAYDEFS (and the following newline) from the text
             text = text[defs_end_index + len(self.definition_delimeter) :]
 
-        return self.trim_newlines(text)
+        return text.strip()
 
-    def trim_newlines(self, text: str) -> str:
-        """
-        trim_newlines - Removes newlines from the start and end of the text
-
-        Args:
-            text (str): The text to trim the newlines of
-
-        Returns:
-            str: The trimmed text
-        """
-        if text.startswith("\n"):
-            text = text[1:]
-        if text.endswith("\n"):
-            text = text[:-1]
-
-        return text
+    @contextmanager
+    def primary_syntax_definitions(self, stream: TokenStream):
+        with stream.syntax(
+            # Symbols
+            escape=r"\\.",
+            sqrbr=r"\[|\]",
+            brace=r"\{|\}",
+            scope=r"<|>",
+            equals=r"=",
+            text=r"[^\[\]\{\}<>\\]+",
+            arrow=r" ?[-=]> ?",
+            # Types
+            hex_code=r"#[0-9a-fA-F]{6}",
+            url=r"http(s)?:\/\/[^(),]+\.[^(),]+",
+            integer=r"[\d]+",
+            color=r"black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray|dark_gray|blue|green|aqua|red|light_purple|yellow|white|reset",
+            keybind=r"advancements|attack|back|chat|command|drop|forward|fullscreen|hotbar|inventory|jump|left|loadToolbarActivator|pickItem|playerlist|right|saveToolbarActivator|screenshot|smoothCamera|sneak|socialInteractions|spectatorOutlines|sprint|swapOffhand|togglePerspective|use",
+            selector=r"@[parse](\[.*\])?",
+            boolean=r"true|false",
+            string=r"\"(?:\\.|[^\\\n])*?\"",
+            # Keywords sorted by type
+            kw_json=r"hover_item",
+            kw_scope=r"hover_text",
+            kw_color=r"color",
+            kw_link=r"link",
+            kw_string=r"copy|suggest|run|insertion|font",
+            kw_bool=r"bold|italic|obfuscated|strikethrough|underlined",
+            kw_integer=r"page",
+            kw_standalone=r"block|entity|storage|selector|translate|score|nbt|separator|interpret|sep|key|with",
+        ):
+            yield
 
     def parse_definitions(self, stream: TokenStream) -> None:
         """
@@ -116,36 +133,7 @@ class Parser:
                 if pattern:
                     stream.expect(("paren", "("))
 
-                    with stream.syntax(
-                        # Symbols
-                        escape=r"\\.",
-                        sqrbr=r"\[|\]",
-                        brace=r"\{|\}",
-                        scope=r"<|>",
-                        equals=r"=",
-                        text=r"[^\[\]\{\}<>\\]+",
-                        arrow=r" ?[-=]> ?",
-                        # Types
-                        hex_code=r"#[0-9a-fA-F]{6}",
-                        url=r"http(s)?:\/\/[^(),]+\.[^(),]+",
-                        integer=r"[\d]+",
-                        color=r"black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray|dark_gray|blue|green|aqua|red|light_purple|yellow|white|reset",
-                        keybind=r"advancements|attack|back|chat|command|drop|forward|fullscreen|hotbar|inventory|jump|left|loadToolbarActivator|pickItem|playerlist|right|saveToolbarActivator|screenshot|smoothCamera|sneak|socialInteractions|spectatorOutlines|sprint|swapOffhand|togglePerspective|use",
-                        selector=r"@[parse](\[.*\])?",
-                        boolean=r"true|false",
-                        string=r"\"(?:\\.|[^\\\n])*?\"",
-                        # Keywords sorted by type
-                        kw_json=r"hover_item",
-                        kw_scope=r"hover_text",
-                        kw_color=r"color",
-                        kw_link=r"link",
-                        kw_string=r"copy|suggest|run|insertion|font",
-                        kw_bool=r"bold|italic|obfuscated|strikethrough|underlined",
-                        kw_integer=r"page",
-                        kw_standalone=r"selector|translate|score|nbt|separator|sep|key",
-                        kw_with=r"with",
-                        nbt_location=r"block|entity|storage",
-                    ):
+                    with self.primary_syntax_definitions(stream):
                         pattern_contents = self.parse_modifiers(stream)
 
                     stream.expect(("paren", ")"))
@@ -185,36 +173,7 @@ class Parser:
         """
         output = []
 
-        with stream.syntax(
-            # Symbols
-            escape=r"\\.",
-            sqrbr=r"\[|\]",
-            brace=r"\{|\}",
-            scope=r"<|>",
-            equals=r"=",
-            text=r"[^\[\]\{\}<>\\]+",
-            arrow=r" ?[-=]> ?",
-            # Types
-            hex_code=r"#[0-9a-fA-F]{6}",
-            url=r"http(s)?:\/\/[^(),]+\.[^(),]+",
-            integer=r"[\d]+",
-            color=r"black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray|dark_gray|blue|green|aqua|red|light_purple|yellow|white|reset",
-            keybind=r"advancements|attack|back|chat|command|drop|forward|fullscreen|hotbar|inventory|jump|left|loadToolbarActivator|pickItem|playerlist|right|saveToolbarActivator|screenshot|smoothCamera|sneak|socialInteractions|spectatorOutlines|sprint|swapOffhand|togglePerspective|use",
-            selector=r"@[parse](\[.*\])?",
-            boolean=r"true|false",
-            string=r"\"(?:\\.|[^\\\n])*?\"",
-            # Keywords sorted by type
-            kw_json=r"hover_item",
-            kw_scope=r"hover_text",
-            kw_color=r"color",
-            kw_link=r"link",
-            kw_string=r"copy|suggest|run|insertion|font",
-            kw_bool=r"bold|italic|obfuscated|strikethrough|underlined",
-            kw_integer=r"page",
-            kw_standalone=r"selector|translate|score|nbt|separator|sep|key",
-            kw_with=r"with",
-            nbt_location=r"block|entity|storage",
-        ):
+        with self.primary_syntax_definitions(stream):
             for sqrbr, brace, escape, text in stream.collect(
                 ("sqrbr", "["), ("brace", "{"), "escape", "text"
             ):
@@ -275,65 +234,49 @@ class Parser:
         if stream.data.get("scoped"):
             raise InvalidSyntax("Unexpected scope")
 
-    def parse_standalone(self, stream: TokenStream) -> dict:
-        """
-        parse_standalone - Parses a standalone block
-
-        Args:
-            stream (TokenStream): The stream to parse
-
-        Returns:
-            dict: The standalone block contents
-        """
+    def parse_non_template_standalone(self, stream: TokenStream) -> dict:
         standalone_contents = {}
-        with stream.syntax(text=None, comma=r",", template=r"\$\w+"):
-            selector, kw_standalone, template = stream.expect(
-                "selector", "kw_standalone", "template"
-            )
+
+        # TODO make standalone elements non-order dependant
+        with stream.syntax(text=None, comma=r","):
+            selector = stream.get("selector")
+            kw_standalone = stream.get("kw_standalone")
+
             if selector:
-                separator = (
-                    self.parse_separator(stream) if stream.get("comma") else None
-                )
                 standalone_contents["selector"] = selector.value
-                if separator:
-                    standalone_contents["separator"] = separator
 
             elif kw_standalone:
-                if kw_standalone.value == "key":
+                if kw_standalone.value in {"sep", "separator"}:
                     stream.expect("equals")
-                    keybind_value = stream.expect("keybind")
-                    standalone_contents["keybind"] = "key." + keybind_value.value
+                    standalone_contents["separator"] = stream.expect("string").value[
+                        1:-1
+                    ]
+
+                elif kw_standalone.value == "key":
+                    stream.expect("equals")
+                    standalone_contents["keybind"] = (
+                        "key." + stream.expect("keybind").value
+                    )
 
                 elif kw_standalone.value == "translate":
                     stream.expect("equals")
-                    translation_key = stream.expect("string").value[1:-1]
+                    standalone_contents["translate"] = stream.expect("string").value[
+                        1:-1
+                    ]
 
-                    with_value = None
-                    if stream.get("comma"):
-                        stream.expect("kw_with")
-                        stream.expect("equals")
-                        with_value = parse_json(stream)
-
-                    standalone_contents["translate"] = translation_key
-                    if with_value:
-                        standalone_contents["with"] = with_value
+                elif kw_standalone.value == "with":
+                    stream.expect("equals")
+                    standalone_contents["with"] = parse_json(stream)
 
                 elif kw_standalone.value == "nbt":
                     stream.expect("equals")
-                    nbt_path = stream.expect("string").value[1:-1]
-                    stream.expect("comma")
+                    standalone_contents["nbt"] = stream.expect("string").value[1:-1]
 
-                    nbt_type = stream.expect("nbt_location").value
+                elif kw_standalone.value in {"block", "entity", "storage"}:
                     stream.expect("equals")
-                    nbt_location = stream.expect("string").value[1:-1]
-
-                    separator = (
-                        self.parse_separator(stream) if stream.get("comma") else None
-                    )
-                    standalone_contents["nbt"] = nbt_path
-                    standalone_contents[nbt_type] = nbt_location
-                    if separator:
-                        standalone_contents["separator"] = separator
+                    standalone_contents[kw_standalone.value] = stream.expect(
+                        "string"
+                    ).value[1:-1]
 
                 elif kw_standalone.value == "score":
                     stream.expect("equals")
@@ -345,32 +288,69 @@ class Parser:
                         "objective": objective_name,
                     }
 
-            elif template:
-                if (q := template.value) not in self.templates:
-                    raise InvalidSyntax(f"Unknown template '{q}'")
+                elif kw_standalone.value == "interpret":
+                    if stream.get("equals"):
+                        boolean_value = stream.expect("boolean").value
+                    else:
+                        boolean_value = "true"
 
-                args = self.parse_template_args(stream)
-                if args:
-                    # Turn the template into a string so we can use replace on it
-                    template_value = json.dumps(self.templates[q])
-                    # Replace all the tokens
-                    for index, arg in enumerate(args):
-                        template_value = template_value.replace(f"%{index}", arg)
+                    standalone_contents["interpret"] = boolean_value == "true"
 
-                    # Convert it back into a dictionary
-                    standalone_contents = json.loads(template_value)
+            else:
+                raise InvalidSyntax("Unknown standalone element input")
 
-        stream.expect(("brace", "}"))
+        if stream.get("comma"):
+            standalone_contents = (
+                standalone_contents | self.parse_non_template_standalone(stream)
+            )
 
-        with stream.syntax(paren=r"\(|\)"):
-            if stream.get(("paren", "(")):
-                modifier_contents = self.parse_modifiers(stream)
-                stream.expect(("paren", ")"))
+        return standalone_contents
 
-                try:
-                    standalone_contents = standalone_contents | modifier_contents
-                except TypeError:
-                    raise InvalidSyntax("Modifiers are not supported on templates")
+    def parse_standalone(self, stream: TokenStream) -> dict:
+        """
+        parse_standalone - Parses a standalone block
+
+        Args:
+            stream (TokenStream): The stream to parse
+
+        Returns:
+            dict: The standalone block contents
+        """
+        standalone_contents = {}
+
+        with stream.syntax(text=None, comma=r",", template=r"\$\w+"):
+            if token := stream.peek():
+                if token.match("template"):
+                    template = stream.expect("template")
+
+                    if (q := template.value) not in self.templates:
+                        raise InvalidSyntax(f"Unknown template '{q}'")
+
+                    args = self.parse_template_args(stream)
+                    if args:
+                        # Turn the template into a string so we can use replace on it
+                        template_value = json.dumps(self.templates[q])
+                        # Replace all the tokens
+                        for index, arg in enumerate(args):
+                            template_value = template_value.replace(f"%{index}", arg)
+
+                        # Convert it back into a dictionary
+                        standalone_contents = json.loads(template_value)
+
+                else:
+                    standalone_contents = self.parse_non_template_standalone(stream)
+
+            stream.expect(("brace", "}"))
+
+            with stream.syntax(paren=r"\(|\)"):
+                if stream.get(("paren", "(")):
+                    modifier_contents = self.parse_modifiers(stream)
+                    stream.expect(("paren", ")"))
+
+                    try:
+                        standalone_contents = standalone_contents | modifier_contents
+                    except TypeError:
+                        raise InvalidSyntax("Modifiers are not supported on templates")
 
         return standalone_contents
 

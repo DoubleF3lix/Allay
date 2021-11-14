@@ -58,13 +58,16 @@ Modifier blocks can also be applied to **standalone blocks**. Standalone blocks 
 
 Here is a list of all valid arguments in a standalone block:
 - `selector` - `selector`
-- `translate` - `string`, specifies the translation key
-- `with` - `json`, optional. Only used with `translate` and must be used after `translate`.
-- `nbt` - `string`, defines the NBT path on the location specified
-- `block/entity/storage` - `string`, defines the location that the NBT path should be looked up in. Selectors and coordinates should be put in strings as well (`"@s"` / `"83 76 239"`) Must be included with `nbt`.
-- `sep` or `separator` - Optional. Defines the string that should be inserted between entity/NBT selectors that target multiple values. Only used with `nbt` and `selector`. Must be specified last.
+- `translate` - `string`
+- `with` - `json`
+- `nbt` - `string`
+- `block/entity/storage` - `string`, Selectors and coordinates should be put in strings as well (`"@s"` / `"83 76 239"`).
+- `interpret` - `boolean`, follows the same rules as booleans in modifiers (`=true` is optional. Just `interpret` is valid.)
+- `sep` or `separator` - Optional. Defines the string that should be inserted between entity/NBT selectors that target multiple values. Only used with `nbt` and `selector`.
 - `score` - `string`. Must be followed by an arrow (`->`) and another string containing the objective name
 - `key` - `keybind`
+
+All standalone arguments are non-order specific, but components that are invalid in-game will not return an error. For instance, mixing `nbt` and `selector` will give unintended results in game, but will be seen as valid to the parser. Be careful not to mix invalid items.
 
 And some examples:
 - `{@s}`
@@ -83,7 +86,7 @@ And some examples:
 ---
 ## Definitions
 
-Allay also supports text reuse in the form of **patterns** and **templates** (collectively referred to as **definitions**). All definitions must be included at the top of the file and separated by a delimiter (`#ALLAYDEFS` by default). Patterns can be identified by the `@` symbol, and templates can be defined by the `$` symbol. Both can be given custom names, but these names can only include letters, numbers, and underscores.
+Allay also supports text reuse in the form of **patterns** and **templates** (collectively referred to as **definitions**). All definitions must be included at the top of the file and separated by a delimiter (`#ALLAYDEFS\n` by default). Patterns can be identified by the `@` symbol, and templates can be defined by the `$` symbol. Both can be given custom names, but these names can only include letters, numbers, and underscores.
 
 ---
 ### Patterns
@@ -138,7 +141,7 @@ $template = {}
 
 Okay, back to the show.
 ```
-The first blank line in-between the delimiter (`#ALLAYDEFS`) and the text body is ignored. The delimiter cannot be escaped, so using it in your text will result in the definitions being ended prematurely and likely a syntax error. However, if this becomes an issue, you can change the delimiter by setting `definition_delimeter` in `allay.Parser()`.
+The first blank line in-between the delimiter (`#ALLAYDEFS\n`) and the text body is ignored. The delimiter cannot be escaped, so using it in your text will result in the definitions being ended prematurely and likely a syntax error. However, if this becomes an issue, you can change the delimiter by setting `definition_delimeter` in `allay.Parser()`.
 
 --- 
 ## Notes
@@ -150,5 +153,6 @@ If you have any questions, need any help, etc., feel free to make an issue with 
 
 ## Credits
 * [fizzy/vberlier](https://github.com/vberlier) - Creator of TokenStream. Helped walk me through using it and any issues I had. 10/10 customer service.
+* [rx](https://github.com/rx-modules) - Creator of the beet plugin, gave me a lot of feedback
 * Amber - Helped with designing the Allay format, gave me the idea in the first place
 * nphhpn, vdvman1, discohund, Repertor, miestrode, rx, Ravbug, Ersatz, and a bunch of others on the Minecraft Commands Discord - Helped walk me through the process (and grief) of creating a parser by hand before I started using TokenStream. 
