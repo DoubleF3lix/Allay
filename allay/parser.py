@@ -327,15 +327,16 @@ class Parser:
                         raise InvalidSyntax(f"Unknown template '{q}'")
 
                     args = self.parse_template_args(stream)
-                    if args:
-                        # Turn the template into a string so we can use replace on it
-                        template_value = json.dumps(self.templates[q])
-                        # Replace all the tokens
-                        for index, arg in enumerate(args):
-                            template_value = template_value.replace(f"%{index}", arg)
 
-                        # Convert it back into a dictionary
-                        standalone_contents = json.loads(template_value)
+                    # Turn the template into a string so we can use replace on it
+                    template_value = json.dumps(self.templates[q])
+
+                    # Replace all the tokens
+                    for index, arg in enumerate(args):
+                        template_value = template_value.replace(f"%{index}", arg)
+
+                    # Convert it back into a dictionary
+                    standalone_contents = json.loads(template_value)
 
                 else:
                     standalone_contents = self.parse_non_template_standalone(stream)
