@@ -27,9 +27,9 @@ class AllayMessage(TextFile, NamespaceFile):
 
 def register_pattern(name: str, raw: Union[JsonDict, str]):
     if isinstance(raw, str):
-        raw = json.loads(parser.parse(raw))
-
-    parser.patterns[f"@{name}"] = raw
+        raw = json.loads(parser.parse(f'@{name} = {raw}\n#ALLAYDEFS\n'))
+    else:
+        parser.patterns[f"@{name}"] = raw
 
 
 def register_template(name: str, raw: Union[JsonDict, str]):
