@@ -115,7 +115,7 @@ class Parser:
         name: str,
         stream: str | TokenStream,
         auto_generate_stream: bool,
-    ) -> str:
+    ) -> tuple:
         obj = self.patterns if type == "pattern" else self.templates
 
         if name in obj:
@@ -126,11 +126,24 @@ class Parser:
         if auto_generate_stream:
             stream = TokenStream(stream)
 
-        return stream, "$" + name if not name.startswith("$") else name
+        name_prefix = "@" if type == "pattern" else "$"
+
+        return stream, name_prefix + name if not name.startswith(name_prefix) else name
 
     def add_pattern(
         self, name: str, stream: str | TokenStream, auto_generate_stream: bool = True
-    ) -> str:
+    ) -> str | dict:
+        """
+        add_pattern - Adds a pattern to the parser.
+
+        Args:
+            name (str): The name of the template. The beginning ``@`` is optional.
+            stream (str): The stream that contains the pattern. Make sure to enclose it in parenthesis. It can be a string or a ``TokenStream`` object. If a string, it will be converted to a ``TokenStream``.
+            auto_generate_stream (bool, optional): Whether or not to wrap ``stream`` in a ``TokenStream`` object. Only set this to ``False`` if you're converting it manually. Defaults to True.
+
+        Returns:
+            dict: The parsed pattern
+        """
         stream, name = self.add_definition(
             "pattern", name, stream, auto_generate_stream
         )
@@ -147,7 +160,18 @@ class Parser:
 
     def add_template(
         self, name: str, stream: str | TokenStream, auto_generate_stream: bool = True
-    ) -> str:
+    ) -> dict:
+        """
+        add_template - Adds a template to the parser.
+
+        Args:
+            name (str): The name of the template. The beginning ``$`` is optional.
+            stream (str): The stream that contains the template. Do not include the surrounding braces. It can be a string or a ``TokenStream`` object. If a string, it will be converted to a ``TokenStream``.
+            auto_generate_stream (bool, optional): Whether or not to wrap ``stream`` in a ``TokenStream`` object. Only set this to ``False`` if you're converting it manually. Defaults to True.
+
+        Returns:
+            dict: The parsed template
+        """
         stream, name = self.add_definition(
             "template", name, stream, auto_generate_stream
         )
