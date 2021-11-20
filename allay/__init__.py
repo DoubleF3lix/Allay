@@ -6,6 +6,7 @@ __all__ = ["Parser"]
 # This allows it to stay as an optional dep
 try:
     import beet
+
     from .plugin import beet_default
 
     __all__.append("beet_default")

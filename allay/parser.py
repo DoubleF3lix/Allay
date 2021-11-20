@@ -21,13 +21,16 @@ class Parser:
         self.patterns = {}
         self.templates = {}
 
-    def parse(self, input: str, indent: int = None) -> str:
+    def parse(
+        self, input: str, indent: int = None, json_dump: bool = True
+    ) -> str | dict:
         """
         parse - Converts a string into a text-component using the Allay format
 
         Args:
             input (str): The string to parse, or a file path
-            indent (int, optional): Indentation level. Defaults to None.
+            indent (int, optional): Indentation level. Defaults to None. Ignored if ``json_dump`` is False.
+            json_dump (bool, optional): Whether to dump the output as JSON in a string. Defaults to True.
 
         Raises:
             InvalidSyntax: The syntax is invalid
@@ -46,7 +49,11 @@ class Parser:
         # Print errors but with pizzaz
         try:
             stream = TokenStream(self.pre_process(input))
-            return json.dumps(self.internal_parse(stream), indent=indent)
+            output = self.internal_parse(stream)
+            if json_dump:
+                return json.dumps(output, indent=indent)
+            return output
+
         except InvalidSyntax as error:
             error_line = error.location.lineno
             error_column = error.location.colno
@@ -57,12 +64,6 @@ class Parser:
             )
 
     def pre_process(self, text: str) -> str:
-        """
-        pre_process - Pre-processes the text to isolate any definitions and parse them, as well as clean up the text
-
-        Returns:
-            str: The pre-processed text
-        """
         # Separate the special components (patterns and templates)
         defs_end_index = text.find(self.definition_delimeter)
 
@@ -108,44 +109,75 @@ class Parser:
         ):
             yield
 
+    def add_definition(
+        self,
+        type: str,
+        name: str,
+        stream: str | TokenStream,
+        auto_generate_stream: bool,
+    ) -> str:
+        obj = self.patterns if type == "pattern" else self.templates
+
+        if name in obj:
+            raise InvalidSyntax(
+                f"{type.capitalize()} '{name}' has already been defined"
+            )
+
+        if auto_generate_stream:
+            stream = TokenStream(stream)
+
+        return stream, "$" + name if not name.startswith("$") else name
+
+    def add_pattern(
+        self, name: str, stream: str | TokenStream, auto_generate_stream: bool = True
+    ) -> str:
+        stream, name = self.add_definition(
+            "pattern", name, stream, auto_generate_stream
+        )
+
+        with stream.syntax(paren=r"\(|\)"):
+            stream.expect(("paren", "("))
+            with self.primary_syntax_definitions(stream):
+                contents = self.parse_modifiers(stream)
+            stream.expect(("paren", ")"))
+
+        self.patterns[name] = contents
+
+        return contents
+
+    def add_template(
+        self, name: str, stream: str | TokenStream, auto_generate_stream: bool = True
+    ) -> str:
+        stream, name = self.add_definition(
+            "template", name, stream, auto_generate_stream
+        )
+
+        contents = self.internal_parse(stream)
+
+        self.templates[name] = contents
+
+        return contents
+
     def parse_definitions(self, stream: TokenStream) -> None:
-        """
-        parse_definitions - Parses the definition block (anything above the delimeter) and adds them to class variables
-
-        Args:
-            stream (TokenStream): The stream to parse
-
-        Raises:
-            InvalidSyntax: Invalid syntax was found in a definition
-        """
         with stream.syntax(
             pattern=r"@\w+",
             template=r"\$\w+",
             equals=r"=",
             paren=r"\(|\)",
             brace=r"{|}",
-            semicolon=r";",
         ), stream.intercept("newline"):
 
             try:
                 pattern, template = stream.expect("pattern", "template")
                 stream.expect("equals")
+
                 if pattern:
-                    stream.expect(("paren", "("))
-
-                    with self.primary_syntax_definitions(stream):
-                        pattern_contents = self.parse_modifiers(stream)
-
-                    stream.expect(("paren", ")"))
-
-                    self.patterns[pattern.value] = pattern_contents
+                    self.add_pattern(stream, pattern.value, auto_generate_stream=False)
 
                 elif template:
-                    stream.expect(("brace", "{"))
-                    template_contents = self.internal_parse(stream)
-                    stream.expect(("brace", "}"))
-
-                    self.templates[template.value] = template_contents
+                    self.add_template(
+                        stream, template.value, auto_generate_stream=False
+                    )
 
                 if stream.get("newline"):
                     # Handle new lines in-between arguments
@@ -162,15 +194,6 @@ class Parser:
                     raise error
 
     def internal_parse(self, stream: TokenStream) -> list:
-        """
-        internal_parse - Main parsing function. Wrapped by ``parse``.
-
-        Args:
-            stream (TokenStream): The stream to parse
-
-        Returns:
-            list: The parsed stream
-        """
         output = []
 
         with self.primary_syntax_definitions(stream):
@@ -208,36 +231,17 @@ class Parser:
             return output
 
     def parse_separator(self, stream: TokenStream) -> str:
-        """
-        parse_separator - Parses a separator. This is its own function since it's used several times.
-
-        Args:
-            stream (TokenStream): The stream to parse
-
-        Returns:
-            str: The separator value
-        """
         stream.expect(("kw_standalone", "sep"), ("kw_standalone", "separator"))
         stream.expect("equals")  # equal sign
         return stream.expect("string").value[1:-1]
 
     def error_if_scope(self, stream: TokenStream) -> None:
-        """
-        error_if_scope - Raises an error if the stream is in a scope when it shouldn't be
-
-        Args:
-            stream (TokenStream): The stream to check the scope status of
-
-        Raises:
-            InvalidSyntax: Raised if the stream is in a scope
-        """
         if stream.data.get("scoped"):
             raise InvalidSyntax("Unexpected scope")
 
     def parse_non_template_standalone(self, stream: TokenStream) -> dict:
         standalone_contents = {}
 
-        # TODO make standalone elements non-order dependant
         with stream.syntax(text=None, comma=r","):
             selector = stream.get("selector")
             kw_standalone = stream.get("kw_standalone")
@@ -307,15 +311,6 @@ class Parser:
         return standalone_contents
 
     def parse_standalone(self, stream: TokenStream) -> dict:
-        """
-        parse_standalone - Parses a standalone block
-
-        Args:
-            stream (TokenStream): The stream to parse
-
-        Returns:
-            dict: The standalone block contents
-        """
         standalone_contents = {}
 
         with stream.syntax(text=None, comma=r",", template=r"\$\w+"):
@@ -356,15 +351,6 @@ class Parser:
         return standalone_contents
 
     def parse_template_args(self, stream: TokenStream) -> list:
-        """
-        parse_template_args - Parses the arguments for a template
-
-        Args:
-            stream (TokenStream): The template call to parse the arguments for
-
-        Returns:
-            list: The list of parsed arguments
-        """
         args = []
         if stream.get("comma"):
             # 1:-1 to remove quotes
@@ -375,15 +361,6 @@ class Parser:
         return args
 
     def parse_modifiers(self, stream: TokenStream) -> dict:
-        """
-        parse_modifiers - Parses a modifier block
-
-        Args:
-            stream (TokenStream): The stream to parse
-
-        Returns:
-            dict: The modifier contents
-        """
         modifier_contents = {}
         with stream.syntax(
             text=None,
@@ -517,15 +494,6 @@ class Parser:
         return modifier_contents
 
     def clean_ast(self, ast: list) -> list:
-        """
-        clean_ast - Cleans up an AST by iterating through it and merging strings that are next to each other
-
-        Args:
-            ast (list): The AST to clean
-
-        Returns:
-            str: The cleaned AST
-        """
         # Merges strings together into one string
         cleaned_ast = ast[:1]
         for elem in ast[1:]:
@@ -537,15 +505,6 @@ class Parser:
         return cleaned_ast
 
     def convert_ast_to_json(self, ast: list) -> list:
-        """
-        convert_ast_to_json - Converts an AST to valid text-component JSON
-
-        Args:
-            ast (list): The AST to convert
-
-        Returns:
-            list: The text-component JSON
-        """
         output = [""]
         for item in ast:
             if isinstance(item, str):
