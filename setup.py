@@ -5,7 +5,7 @@ with open("README.md", "r") as readme:
 
 setuptools.setup(
     name="allay",
-    version="1.2.0",
+    version="1.2.1",
     description="A parser to convert a descriptive text format into minecraft text components",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -16,5 +16,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.10",
+    python_requires=">=3.9",
 )

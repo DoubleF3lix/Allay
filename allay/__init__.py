@@ -1,4 +1,4 @@
-from .parser import Parser
+from allay.parser import Parser
 
 __all__ = ["Parser"]
 
@@ -7,7 +7,7 @@ __all__ = ["Parser"]
 try:
     import beet
 
-    from .plugin import beet_default
+    from allay.plugin import beet_default
 
     __all__.append("beet_default")
 except ImportError:

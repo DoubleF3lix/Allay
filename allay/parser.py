@@ -1,10 +1,15 @@
 import json
 from contextlib import contextmanager
+from typing import Union
 
 from tokenstream import TokenStream
 from tokenstream.error import InvalidSyntax
 
-from .json_parser import parse_json
+from allay.json_parser import parse_json
+
+
+class DefinitionAlreadyExists(Exception):
+    ...
 
 
 class Parser:
@@ -23,7 +28,7 @@ class Parser:
 
     def parse(
         self, input: str, indent: int = None, json_dump: bool = True
-    ) -> str | dict:
+    ) -> Union[str, dict]:
         """
         parse - Converts a string into a text-component using the Allay format
 
@@ -36,7 +41,7 @@ class Parser:
             InvalidSyntax: The syntax is invalid
 
         Returns:
-            str: The text-component
+            Union[str, dict]: The text-component
         """
         # Check if it's a file, and if it is, use the file contents as the input
         try:
@@ -77,6 +82,9 @@ class Parser:
 
         return text.strip()
 
+    def get_string(self, stream: TokenStream) -> str:
+        return stream.expect("string").value[1:-1].replace('\\"', '"')
+
     @contextmanager
     def primary_syntax_definitions(self, stream: TokenStream):
         with stream.syntax(
@@ -96,7 +104,7 @@ class Parser:
             keybind=r"advancements|attack|back|chat|command|drop|forward|fullscreen|hotbar|inventory|jump|left|loadToolbarActivator|pickItem|playerlist|right|saveToolbarActivator|screenshot|smoothCamera|sneak|socialInteractions|spectatorOutlines|sprint|swapOffhand|togglePerspective|use",
             selector=r"@[parse](\[.*\])?",
             boolean=r"true|false",
-            string=r"\"(?:\\.|[^\\\n])*?\"",
+            string=r'"(?:\\.|[^"\\])*"',
             # Keywords sorted by type
             kw_json=r"hover_item",
             kw_scope=r"hover_text",
@@ -113,17 +121,17 @@ class Parser:
         self,
         type: str,
         name: str,
-        stream: str | TokenStream,
+        stream: Union[str, TokenStream],
         auto_generate_stream: bool,
     ) -> tuple:
         obj = self.patterns if type == "pattern" else self.templates
 
         if name in obj:
-            raise InvalidSyntax(
+            raise DefinitionAlreadyExists(
                 f"{type.capitalize()} '{name}' has already been defined"
             )
 
-        if auto_generate_stream:
+        if auto_generate_stream and not isinstance(stream, TokenStream):
             stream = TokenStream(stream)
 
         name_prefix = "@" if type == "pattern" else "$"
@@ -131,14 +139,17 @@ class Parser:
         return stream, name_prefix + name if not name.startswith(name_prefix) else name
 
     def add_pattern(
-        self, name: str, stream: str | TokenStream, auto_generate_stream: bool = True
-    ) -> str | dict:
+        self,
+        name: str,
+        stream: Union[str, TokenStream],
+        auto_generate_stream: bool = True,
+    ) -> Union[str, dict]:
         """
         add_pattern - Adds a pattern to the parser.
 
         Args:
             name (str): The name of the template. The beginning ``@`` is optional.
-            stream (str): The stream that contains the pattern. Make sure to enclose it in parenthesis. It can be a string or a ``TokenStream`` object. If a string, it will be converted to a ``TokenStream``.
+            stream (Union[str, TokenStream]): The stream that contains the pattern. Make sure to enclose it in parenthesis. It can be a string or a ``TokenStream`` object. If a string, it will be converted to a ``TokenStream``.
             auto_generate_stream (bool, optional): Whether or not to wrap ``stream`` in a ``TokenStream`` object. Only set this to ``False`` if you're converting it manually. Defaults to True.
 
         Returns:
@@ -148,7 +159,9 @@ class Parser:
             "pattern", name, stream, auto_generate_stream
         )
 
+        # Despite being defined in the outer scope, this token needs to be defined in here also because parenthesis are required when using add_pattern directly. Without this token definition, calling this function directly will result in expecting a parenthesis and fail.
         with stream.syntax(paren=r"\(|\)"):
+            # Parenthesis should be required in both add_pattern and in-text usage
             stream.expect(("paren", "("))
             with self.primary_syntax_definitions(stream):
                 contents = self.parse_modifiers(stream)
@@ -159,14 +172,17 @@ class Parser:
         return contents
 
     def add_template(
-        self, name: str, stream: str | TokenStream, auto_generate_stream: bool = True
+        self,
+        name: str,
+        stream: Union[str, TokenStream],
+        auto_generate_stream: bool = True,
     ) -> dict:
         """
         add_template - Adds a template to the parser.
 
         Args:
             name (str): The name of the template. The beginning ``$`` is optional.
-            stream (str): The stream that contains the template. Do not include the surrounding braces. It can be a string or a ``TokenStream`` object. If a string, it will be converted to a ``TokenStream``.
+            stream (Union[str, TokenStream]): The stream that contains the template. Do not include the surrounding braces. It can be a string or a ``TokenStream`` object. If a string, it will be converted to a ``TokenStream``.
             auto_generate_stream (bool, optional): Whether or not to wrap ``stream`` in a ``TokenStream`` object. Only set this to ``False`` if you're converting it manually. Defaults to True.
 
         Returns:
@@ -196,12 +212,15 @@ class Parser:
                 stream.expect("equals")
 
                 if pattern:
-                    self.add_pattern(stream, pattern.value, auto_generate_stream=False)
+                    self.add_pattern(pattern.value, stream, auto_generate_stream=False)
 
                 elif template:
+                    # Expected here and not in add_template because braces should NOT be added when add_template is used directly
+                    stream.expect(("brace", "{"))
                     self.add_template(
-                        stream, template.value, auto_generate_stream=False
+                        template.value, stream, auto_generate_stream=False
                     )
+                    stream.expect(("brace", "}"))
 
                 if stream.get("newline"):
                     # Handle new lines in-between arguments
@@ -254,11 +273,6 @@ class Parser:
             output = self.convert_ast_to_json(output)
             return output
 
-    def parse_separator(self, stream: TokenStream) -> str:
-        stream.expect(("kw_standalone", "sep"), ("kw_standalone", "separator"))
-        stream.expect("equals")  # equal sign
-        return stream.expect("string").value[1:-1]
-
     def error_if_scope(self, stream: TokenStream) -> None:
         if stream.data.get("scoped"):
             raise InvalidSyntax("Unexpected scope")
@@ -276,9 +290,7 @@ class Parser:
             elif kw_standalone:
                 if kw_standalone.value in {"sep", "separator"}:
                     stream.expect("equals")
-                    standalone_contents["separator"] = stream.expect("string").value[
-                        1:-1
-                    ]
+                    standalone_contents["separator"] = self.get_string(stream)
 
                 elif kw_standalone.value == "key":
                     stream.expect("equals")
@@ -288,9 +300,7 @@ class Parser:
 
                 elif kw_standalone.value == "translate":
                     stream.expect("equals")
-                    standalone_contents["translate"] = stream.expect("string").value[
-                        1:-1
-                    ]
+                    standalone_contents["translate"] = self.get_string(stream)
 
                 elif kw_standalone.value == "with":
                     stream.expect("equals")
@@ -298,7 +308,7 @@ class Parser:
 
                 elif kw_standalone.value == "nbt":
                     stream.expect("equals")
-                    standalone_contents["nbt"] = stream.expect("string").value[1:-1]
+                    standalone_contents["nbt"] = self.get_string(stream)
 
                 elif kw_standalone.value in {"block", "entity", "storage"}:
                     stream.expect("equals")
@@ -308,9 +318,9 @@ class Parser:
 
                 elif kw_standalone.value == "score":
                     stream.expect("equals")
-                    player_name = stream.expect("string").value[1:-1]
+                    player_name = self.get_string(stream)
                     stream.expect("arrow")
-                    objective_name = stream.expect("string").value[1:-1]
+                    objective_name = self.get_string(stream)
                     standalone_contents["score"] = {
                         "name": player_name,
                         "objective": objective_name,
@@ -378,7 +388,7 @@ class Parser:
         args = []
         if stream.get("comma"):
             # 1:-1 to remove quotes
-            args.append(stream.expect("string").value[1:-1])
+            args.append(self.get_string(stream))
             # Add the previous argument to the list
             args.extend(self.parse_template_args(stream))
 
@@ -459,7 +469,7 @@ class Parser:
                     link = url.value
                 elif kw_link:
                     stream.expect("equals")
-                    link = stream.expect("string").value[1:-1]
+                    link = self.get_string(stream)
                     if not link.startswith("http"):
                         link = "https://" + link
                 modifier_contents["clickEvent"] = {"action": "open_url", "value": link}
@@ -469,7 +479,7 @@ class Parser:
                 if kw_string.value != "font":
                     self.error_if_scope(stream)
                 stream.expect("equals")
-                string_value = stream.expect("string").value[1:-1]
+                string_value = self.get_string(stream)
                 if kw_string.value == "copy":
                     modifier_contents["clickEvent"] = {
                         "action": "copy_to_clipboard",

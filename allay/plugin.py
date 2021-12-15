@@ -9,7 +9,7 @@ from beet.core.utils import JsonDict
 from beet.library.base import NamespaceFile
 from beet.library.data_pack import DataPack
 
-from .parser import Parser
+from allay.parser import Parser
 
 parser = Parser()
 
@@ -27,7 +27,7 @@ class AllayMessage(TextFile, NamespaceFile):
 
 def register_pattern(name: str, raw: Union[JsonDict, str]):
     if isinstance(raw, str):
-        raw = json.loads(parser.parse(f'@{name} = {raw}\n#ALLAYDEFS\n'))
+        raw = json.loads(parser.parse(f"@{name} = {raw}\n#ALLAYDEFS\n"))
     else:
         parser.patterns[f"@{name}"] = raw
 

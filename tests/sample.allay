@@ -1,3 +1,8 @@
+@internal_pattern = (italic, yellow)
+@internal_pattern2 = (@internal_pattern, italic=false)
+$internal_template = {inline stuff. hello {@s}(@external_pattern)}
+#ALLAYDEFS
+
 Formatting:
 Here's some basic text. This is [underlined](underlined=true).
 This is [bold](bold=true). This is [italic](italic=true). 
@@ -7,7 +12,7 @@ This is [strikethrough](strikethrough=true). This is [obfuscated](obfuscated=tru
 [Some](font="namespace:font/file/here") text.
 
 Interactivity:
-[insetion](insertion="this text is appended into the chat box when the user shift clicks this")
+[insertion](insertion="this text is appended into the chat box when the user shift clicks this")
 [open url 1](https://example.com)
 [open url 2](link="https://example.com")
 [run cmd](run="say hello. It should support extra \"quotes\" too")
@@ -40,3 +45,12 @@ help:=(walrus operator????)pls"work"beans(test=text)w\~\~hich\~\~_isWHY!you're-\
 
 And here's hoping that escaping things also works:
 Some basic [hover text](hover_text=<hover... hover... hover... :\\>)
+
+
+Now, let's test definitions. Some have been defined outside this file, but the rest are at the top of the file.
+[pattern usage 1](@internal_pattern)
+[pattern usage 2](@internal_pattern2)
+{$internal_template}
+{$external_template1, "here comes arg 1!", "phew, that was close"}
+This shouldn't error
+{$external_template2, ""}
