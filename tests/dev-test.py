@@ -1,3 +1,5 @@
+import os
+
 import allay
 
 parser = allay.Parser()
@@ -8,7 +10,16 @@ parser.add_template(
     "external_template2", "outside stuff. go away {@s}(@external_pattern)"
 )
 
-parsed_contents = parser.parse("tests\\sample.allay")
+# TODO fix this jank and get the proper parser.parse("tests\\sample.allay") working
+with open(
+    os.path.join(
+        os.path.dirname(os.path.dirname(allay.__file__)), "tests", "sample.allay"
+    ),
+    "r",
+) as infile:
+    file_contents = infile.read()
+
+parsed_contents = parser.parse(file_contents)
 
 # TODO invidiual tests instead of one large file
 
