@@ -43,7 +43,7 @@ Here's a full list of all valid modifiers and their expected types (not includin
 - `color` - `color` or `hex_code`
 - `link` - `url`
 - `font` - `string`
-- `copy` - `font`
+- `copy` - `string`
 - `suggest` - `string`
 - `run` - `string`
 - `insertion` - `string`
