@@ -94,7 +94,7 @@ class Parser:
             brace=r"\{|\}",
             scope=r"<|>",
             equals=r"=",
-            text=r"[^\[\]\{\}<>]+",
+            text=r"[^\[\]\{\}<>\\]+",
             arrow=r" ?[-=]> ?",
             # Types
             hex_code=r"#[0-9a-fA-F]{6}",
