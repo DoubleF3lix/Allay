@@ -2,7 +2,4 @@
 allay.egg-info
 *.pyc
 **__pycache__
-**.bat
 **.toml
-build/
-dist/

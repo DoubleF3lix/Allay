@@ -99,7 +99,7 @@ Here is some [modified text](@pattern_name)
 ```
 In this case, `[modified text](@pattern_name)` is equivalent to `[modified text](color=#000000, bold, hover_text=<Basically /clone>)`. 
 
-However, merging patterns wither other modifiers is valid:
+However, merging patterns with other modifiers is valid:
 ```
 @pattern1 = (bold, italic)
 @pattern2 = (underlined, bold=false)

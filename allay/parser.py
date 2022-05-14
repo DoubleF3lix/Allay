@@ -27,13 +27,13 @@ class Parser:
         self.templates = {}
 
     def parse(
-        self, input: str, indent: int = None, json_dump: bool = True
+        self, text: str, indent: int = None, json_dump: bool = True
     ) -> Union[str, dict]:
         """
         parse - Converts a string into a text-component using the Allay format
 
         Args:
-            input (str): The string to parse, or a file path
+            text (str): The text to parse, or a file path
             indent (int, optional): Indentation level. Defaults to None. Ignored if ``json_dump`` is False.
             json_dump (bool, optional): Whether to dump the output as JSON in a string. Defaults to True.
 
@@ -45,15 +45,15 @@ class Parser:
         """
         # Check if it's a file, and if it is, use the file contents as the input
         try:
-            file = f'File "{input}"'  # File path
-            with open(input, "r") as infile:
-                input = infile.read()
-        except (FileNotFoundError, OSError) as error:
+            file = f'File "{text}"'  # File path
+            with open(text, "r") as infile:
+                text = infile.read()
+        except OSError as error:
             file = '"src"'
 
         # Print errors but with pizzaz
         try:
-            stream = TokenStream(self.pre_process(input))
+            stream = TokenStream(self.pre_process(text))
             output = self.internal_parse(stream)
             if json_dump:
                 return json.dumps(output, indent=indent)
@@ -94,7 +94,7 @@ class Parser:
             brace=r"\{|\}",
             scope=r"<|>",
             equals=r"=",
-            text=r"[^\[\]\{\}<>\\]+",
+            text=r"[^\[\]\{\}<>]+",
             arrow=r" ?[-=]> ?",
             # Types
             hex_code=r"#[0-9a-fA-F]{6}",
@@ -136,7 +136,7 @@ class Parser:
 
         name_prefix = "@" if type == "pattern" else "$"
 
-        return stream, name_prefix + name if not name.startswith(name_prefix) else name
+        return stream, name if name.startswith(name_prefix) else name_prefix + name
 
     def add_pattern(
         self,
@@ -231,9 +231,7 @@ class Parser:
 
             except InvalidSyntax as error:
                 # Check if there's no data left to parse. This handles there being extra newlines between any arguments and the #ALLAYDEFS keyword. If there's still data left, then there's a syntax error.
-                if stream.source[
-                    stream.current.location.pos : len(stream.source)
-                ].strip():
+                if stream.source[stream.current.location.pos:].strip():
                     raise error
 
     def internal_parse(self, stream: TokenStream) -> list:
@@ -244,7 +242,10 @@ class Parser:
                 ("sqrbr", "["), ("brace", "{"), "escape", "text"
             ):
                 if escape:
-                    output.append(escape.value[1])
+                    if escape.value[1] in {"b", "f", "n", "r", "t", "\\", "[", "]", "(", ")", "{", "}", "<", ">"}:
+                        output.append(escape.value[1])
+                    else:
+                        output.append(escape.value)
 
                 elif sqrbr:
                     modified_text = self.internal_parse(stream)
@@ -338,9 +339,7 @@ class Parser:
                 raise InvalidSyntax("Unknown standalone element input")
 
         if stream.get("comma"):
-            standalone_contents = (
-                standalone_contents | self.parse_non_template_standalone(stream)
-            )
+            standalone_contents |= self.parse_non_template_standalone(stream)
 
         return standalone_contents
 
@@ -439,8 +438,8 @@ class Parser:
                     # Just "with" for now
                     modifier_contents[kw_json.value] = json
 
-            elif kw_scope:
-                # Just "hover_text" for now
+            elif kw_scope: # Just "hover_text" for now
+                self.error_if_scope(stream)
                 stream.expect("equals")
                 stream.expect(("scope", "<"))
                 with stream.provide(scoped=True):
@@ -471,7 +470,7 @@ class Parser:
                     stream.expect("equals")
                     link = self.get_string(stream)
                     if not link.startswith("http"):
-                        link = "https://" + link
+                        link = f"https://{link}"
                 modifier_contents["clickEvent"] = {"action": "open_url", "value": link}
 
             elif kw_string:
@@ -520,10 +519,10 @@ class Parser:
                 if (q := pattern.value) not in self.patterns:
                     raise InvalidSyntax(f"Unknown pattern '{q}'")
 
-                modifier_contents = modifier_contents | self.patterns[q]
+                modifier_contents |= self.patterns[q]
 
             if stream.get("comma"):
-                modifier_contents = modifier_contents | self.parse_modifiers(stream)
+                modifier_contents |= self.parse_modifiers(stream)
 
         return modifier_contents
 
