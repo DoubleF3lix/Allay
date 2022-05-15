@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "allay"
+version = "1.3.0"
+description = "A parser to convert a descriptive text format into minecraft text components"
+authors = ["DoubleFelix"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+tokenstream = "^1.4.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.1.2"
+black = "^22.3.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
