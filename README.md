@@ -38,7 +38,9 @@ Modifiers should always be a set of key and value pairs separated by an equal si
 - Built-in colors do not require a `color` keyword. `[text](black)` is valid.
 
 Here's a full list of all valid modifiers and their expected types (not including the exceptions listed above):
-- `hover_item` - `json`, should describe `contents.show_item` as demonstrated [here](https://minecraft.fandom.com/wiki/Raw_JSON_text_format).
+- `hover_item` - `json`, should describe `contents.show_item` as demonstrated [here](https://minecraft.fandom.com/wiki/Raw_JSON_text_format). Note that using this in code **SUCKS** so here's an example to help you out a bit:
+    - In a python string: `[All](hover_item={"id": "minecraft:netherite_hoe", "tag": "{display: {Name: \\"\\\\\\"joe\\\\\\"\\"}}"})`
+    - In a file: `[All](hover_item={"id": "minecraft:netherite_hoe", "tag": "{display: {Name: \"\\\"joe\\\"\"}}"})` 
 - `hover_text` - `scope block`
 - `color` - `color` or `hex_code`
 - `link` - `url`
@@ -61,9 +63,9 @@ Here is a list of all valid arguments in a standalone block:
 - `translate` - `string`
 - `with` - `json`
 - `nbt` - `string`
-- `block/entity/storage` - `string`, Selectors and coordinates should be put in strings as well (`"@s"` / `"83 76 239"`).
+- `block/entity/storage` - `string`, Selectors and coordinates should be put in strings as well (`"@s"` / `"88 72 239"`).
 - `interpret` - `boolean`, follows the same rules as booleans in modifiers (`=true` is optional. Just `interpret` is valid.)
-- `sep` or `separator` - Optional. Defines the string that should be inserted between entity/NBT selectors that target multiple values. Only used with `nbt` and `selector`.
+- `sep` or `separator` - `string`. Defines the string that should be inserted between entity/NBT selectors that target multiple values. Only used with `nbt` and `selector`.
 - `score` - `string`. Must be followed by an arrow (`->`) and another string containing the objective name
 - `key` - `keybind`
 
@@ -133,7 +135,8 @@ For instance, you owe me $18,000.00.
 Arguments are done simply via find-replace, so take care to avoid using `%<num>` in your text. Currently, they cannot be escaped. Any missing arguments will not be replaced (and left as `%<num>`), and any extra arguments will be ignored. All arguments must be passed in as strings.
 
 ---
-To use definitions in your text, do the following:
+### Using templates and patterns in your text
+To use these definitions in your text, do the following:
 ```
 @pattern = ()
 $template = {}
@@ -141,7 +144,69 @@ $template = {}
 
 Okay, back to the show.
 ```
+
+---
+### Parenting
+No, this isn't a guide on how to raise kids. Instead, it's an introduction on inheritance in your text components. You see, you might've noticed that in most components you generate with allay, that it's made of a list with the first element being `""`. This is because when a text-component is a list, all elements in the list inherit from the first element (so we set it to a blank string to avoid this inheritance). However, sometimes inheritance is useful. For example, if your entire component needs to be in bold, then you might want to set the parent to be `{"bold": true}` instead of wrapping your entire component inside a text isolator, but that can block certain features (nested modifier blocks isn't supported). Instead, you can do this:
+```
+PARENT = (bold)
+#ALLAYDEFS
+Hello, World!
+```
+This will output `[{"bold": true}, {"text": "Hello, World!"}]`. Note that parents persist (not across different parse calls though). Why is this persistence useful? Well, it lets you set the parent for a template, like so:
+```
+PARENT = (bold)
+$template = {Hello, it's me}
+#ALLAYDEFS
+{$template}; I'm in California dreamin'...
+```
+However, this may not do what you expect. This will output the following:
+```json
+[{"bold": true}, [{"bold": true}, {"text": "Hello, it's me"}], {"text":"; I'm in California dreamin'..."}]
+```
+This set the parent for the rest of the text to, and not just our template! Is there any hope for this wretched error? 
+Yup! You can nullify a parent, so the fixed version of the above should look like this:
+```
+PARENT = (bold)
+$template = {Hello, it's me}
+PARENT = NULL
+#ALLAYDEFS
+{$template}; I'm in California dreamin'...
+```
+This will now fix the output:
+```json
+["", [{"bold": true}, {"text": "Hello, it's me"}], {"text":"; I'm in California dreamin'..."}]
+```
+Note that either `NULL` or `null` is valid.
+
+---
+### Configuring the definition delimiter
 The first blank line in-between the delimiter (`#ALLAYDEFS\n`) and the text body is ignored. The delimiter cannot be escaped, so using it in your text will result in the definitions being ended prematurely and likely a syntax error. However, if this becomes an issue, you can change the delimiter by setting `definition_delimeter` in `allay.Parser()`.
+
+---
+### Definitions via Code
+Don't like in-lining definitions and having to fiddle with `#ALLAYDEFS`? Fear not! There's new sheriffs in town and they're names are `add_pattern`, `add_template`, and `set_parent`. 
+These are methods on your parser object (`allay.Parser()`), so they need to be called on that. If you're adding a pattern or template, you need to pass in the name (not needed for parents), and then pass in a string containing your pattern, template, or parent, and voila! 
+Note that patterns and parents do require the parenthesis inside your string (if you're not nullifying a parent that is, otherwise just pass `"null"`), but templates should not include the surrounding braces. 
+Here's a quick example:
+```py
+parser.add_pattern("my_pattern", "(bold)") # parser.parse("[Hello, World!](@my_pattern)")
+parser.add_pattern("my_template", "There once was a human named %0") # parser.parse("{$my_template, \"Jeff\"}")
+parser.set_parent("(strikethrough)") or parser.set_parent("NULL")
+```
+
+---
+## Parser Defaults
+Do you want to output all your components as a dictionary instead of a string and are tired of setting `json_dump=False` for everything? With the power of **parser defaults**, this is easy!
+There are two ways to set parser defaults, demonstrated below
+```py
+parser = allay.Parser(indent=2, json_dump=False)
+# alternatively
+parser.set_defaults(indent=2, json_dump=False)
+```
+Now every call to `parser.parse` will use these values. Note that values set in `parser.parse` will take precedence, so you could have JSON dumping off by default and then enable it explicitly in your function calls for those few special cases.
+If defaults aren't set, then the default values of no indentation and JSON dumping will be set. 
+Note that both arguments in `set_defaults` are optional, and you can set one, both, or neither (but why would you do that?).
 
 --- 
 ## Notes
@@ -154,5 +219,5 @@ If you have any questions, need any help, etc., feel free to make an issue with 
 ## Credits
 * [fizzy/vberlier](https://github.com/vberlier) - Creator of TokenStream. Helped walk me through using it and any issues I had. 10/10 customer service.
 * [rx](https://github.com/rx-modules) - Creator of the beet plugin, gave me a lot of feedback
-* Amber - Helped with designing the Allay format, gave me the idea in the first place
-* nphhpn, vdvman1, discohund, Repertor, miestrode, rx, Ravbug, Ersatz, and a bunch of others on the Minecraft Commands Discord - Helped walk me through the process (and grief) of creating a parser by hand before I started using TokenStream. 
+* [AmberWat](https://github.com/AmberWat) - Helped with designing the Allay format, gave me the idea in the first place
+

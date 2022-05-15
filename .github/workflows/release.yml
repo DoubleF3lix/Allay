@@ -15,15 +15,14 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Install Poetry
+        uses: snok/install-poetry@v1.1.8
+
       - name: Install dependencies
         run: |
-          pip install build
-    
-      - name: Build package
-        run: python -m build
+          poetry install
 
-      - name: Publish package
-        uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
+      - name: Publish python poetry package
+        uses: JRubics/poetry-publish@v1.10
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          pypi_token: ${{ secrets.PYPI_API_TOKEN }}

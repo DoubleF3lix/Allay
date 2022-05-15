@@ -1,0 +1,9 @@
+@intern_patt = (bold, blue)
+$intern_temp = {Never gonna give you up
+%0}
+
+#ALLAYDEFS
+
+Doobah Dabba Dee
+{$intern_temp, "Never gonna let you down"}
+[A Few](@intern_patt)

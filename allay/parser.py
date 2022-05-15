@@ -17,25 +17,38 @@ class Parser:
     Parser - The base class for all allay parsers
 
     Args:
+        indent (int, optional): Indentation level. Ignored if ``json_dump`` is False. Defaults to None.
+        json_dump (bool, optional): Whether to dump the output as JSON in a string. Defaults to None.
         definition_delimeter (str, optional): The delimeter that should separate the definitions from the text. Defaults to "#ALLAYDEFS\n".
     """
 
-    def __init__(self, definition_delimeter: str = "#ALLAYDEFS\n") -> None:
+    def __init__(
+        self,
+        indent: int = None,
+        json_dump: bool = None,
+        definition_delimeter: str = "#ALLAYDEFS\n",
+    ) -> None:
+        # Set default parser options
+        self.indent = indent
+        self.json_dump = json_dump
+        self.set_defaults(indent, json_dump)
+
         self.definition_delimeter = definition_delimeter
 
         self.patterns = {}
         self.templates = {}
+        self.parent = ""
 
     def parse(
-        self, text: str, indent: int = None, json_dump: bool = True
+        self, text: str, indent: int = None, json_dump: bool = None
     ) -> Union[str, dict]:
         """
         parse - Converts a string into a text-component using the Allay format
 
         Args:
             text (str): The text to parse, or a file path
-            indent (int, optional): Indentation level. Defaults to None. Ignored if ``json_dump`` is False.
-            json_dump (bool, optional): Whether to dump the output as JSON in a string. Defaults to True.
+            indent (int, optional): Indentation level. Ignored if ``json_dump`` is False. Defaults to None.
+            json_dump (bool, optional): Whether to dump the output as JSON in a string. Defaults to None.
 
         Raises:
             InvalidSyntax: The syntax is invalid
@@ -43,6 +56,13 @@ class Parser:
         Returns:
             Union[str, dict]: The text-component
         """
+        # Grab defaults (if neither defaults nor function-level config is set, then it should remain None and work fine)
+        if not indent and self.indent:
+            indent = self.indent
+
+        if json_dump is None:
+            json_dump = self.json_dump if self.json_dump is not None else True
+
         # Check if it's a file, and if it is, use the file contents as the input
         try:
             file = f'File "{text}"'  # File path
@@ -55,6 +75,9 @@ class Parser:
         try:
             stream = TokenStream(self.pre_process(text))
             output = self.internal_parse(stream)
+
+            self.parent = ""
+
             if json_dump:
                 return json.dumps(output, indent=indent)
             return output
@@ -67,6 +90,43 @@ class Parser:
                     2
                 )
             )
+
+    def set_defaults(self, indent: int = None, json_dump: bool = None) -> None:
+        """
+        set_defaults - Sets the default values for the parse function
+
+        Args:
+            indent (int, optional): Indentation level. Ignored if ``json_dump`` is False. Defaults to None.
+            json_dump (bool, optional): Whether to dump the output as JSON in a string. Defaults to None.
+        """
+        if indent:
+            self.indent = indent
+
+        if json_dump:
+            self.json_dump = json_dump
+
+    def set_parent(
+        self, stream: TokenStream, auto_generate_stream: bool = True
+    ) -> dict:
+        if auto_generate_stream and not isinstance(stream, TokenStream):
+            stream = TokenStream(stream)
+
+        with stream.syntax(paren=r"\(|\)", null=r"null|NULL"):
+            if stream.get(("paren", "(")):
+                with self.primary_syntax_definitions(stream):
+                    contents = self.parse_modifiers(stream)
+                stream.expect(("paren", ")"))
+
+                self.parent = contents
+                return contents
+
+            elif stream.get("null"):
+                self.parent = ""
+                return ""
+            else:
+                raise InvalidSyntax(
+                    "Expected either modifier or null for parent, got neither"
+                )
 
     def pre_process(self, text: str) -> str:
         # Separate the special components (patterns and templates)
@@ -82,7 +142,7 @@ class Parser:
 
         return text.strip()
 
-    def get_string(self, stream: TokenStream) -> str:
+    def get_string(self, stream: Union[str, TokenStream]) -> str:
         return stream.expect("string").value[1:-1].replace('\\"', '"')
 
     @contextmanager
@@ -126,7 +186,10 @@ class Parser:
     ) -> tuple:
         obj = self.patterns if type == "pattern" else self.templates
 
-        if name in obj:
+        name_prefix = "@" if type == "pattern" else "$"
+        internal_name = name if name.startswith(name_prefix) else name_prefix + name
+
+        if internal_name in obj:
             raise DefinitionAlreadyExists(
                 f"{type.capitalize()} '{name}' has already been defined"
             )
@@ -134,9 +197,7 @@ class Parser:
         if auto_generate_stream and not isinstance(stream, TokenStream):
             stream = TokenStream(stream)
 
-        name_prefix = "@" if type == "pattern" else "$"
-
-        return stream, name if name.startswith(name_prefix) else name_prefix + name
+        return stream, internal_name
 
     def add_pattern(
         self,
@@ -202,13 +263,16 @@ class Parser:
         with stream.syntax(
             pattern=r"@\w+",
             template=r"\$\w+",
+            parent=r"PARENT",
             equals=r"=",
             paren=r"\(|\)",
             brace=r"{|}",
         ), stream.intercept("newline"):
 
             try:
-                pattern, template = stream.expect("pattern", "template")
+                pattern, template, parent = stream.expect(
+                    "pattern", "template", "parent"
+                )
                 stream.expect("equals")
 
                 if pattern:
@@ -222,6 +286,9 @@ class Parser:
                     )
                     stream.expect(("brace", "}"))
 
+                elif parent:
+                    self.set_parent(stream, auto_generate_stream=False)
+
                 if stream.get("newline"):
                     # Handle new lines in-between arguments
                     while stream.get("newline"):
@@ -231,7 +298,7 @@ class Parser:
 
             except InvalidSyntax as error:
                 # Check if there's no data left to parse. This handles there being extra newlines between any arguments and the #ALLAYDEFS keyword. If there's still data left, then there's a syntax error.
-                if stream.source[stream.current.location.pos:].strip():
+                if stream.source[stream.current.location.pos :].strip():
                     raise error
 
     def internal_parse(self, stream: TokenStream) -> list:
@@ -242,7 +309,22 @@ class Parser:
                 ("sqrbr", "["), ("brace", "{"), "escape", "text"
             ):
                 if escape:
-                    if escape.value[1] in {"b", "f", "n", "r", "t", "\\", "[", "]", "(", ")", "{", "}", "<", ">"}:
+                    if escape.value[1] in {
+                        "b",
+                        "f",
+                        "n",
+                        "r",
+                        "t",
+                        "\\",
+                        "[",
+                        "]",
+                        "(",
+                        ")",
+                        "{",
+                        "}",
+                        "<",
+                        ">",
+                    }:
                         output.append(escape.value[1])
                     else:
                         output.append(escape.value)
@@ -438,15 +520,20 @@ class Parser:
                     # Just "with" for now
                     modifier_contents[kw_json.value] = json
 
-            elif kw_scope: # Just "hover_text" for now
+            elif kw_scope:  # Just "hover_text" for now
                 self.error_if_scope(stream)
                 stream.expect("equals")
                 stream.expect(("scope", "<"))
                 with stream.provide(scoped=True):
+                    # Remove the existing parent for a bit
+                    q = self.parent
+                    self.parent = ""
                     modifier_contents["hoverEvent"] = {
                         "action": "show_text",
                         "contents": self.internal_parse(stream),
                     }
+                    # Put the old parent back (even though we shouldn't need it for this parse)
+                    self.parent = q
                 stream.expect(("scope", ">"))
 
             elif kw_color or hex_code:
@@ -538,7 +625,7 @@ class Parser:
         return cleaned_ast
 
     def convert_ast_to_json(self, ast: list) -> list:
-        output = [""]
+        output = [self.parent or ""]
         for item in ast:
             if isinstance(item, str):
                 output.append({"text": item})
